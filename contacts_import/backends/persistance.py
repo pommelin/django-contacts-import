@@ -14,14 +14,12 @@ class BasePersistance(object):
 class ModelPersistance(BasePersistance):
     
     def persist_contact(self, contact, status, credentials):
-        obj, created = TransientContact.objects.get_or_create(
+        obj = TransientContact.objects.create(
             owner = credentials["user"],
-            email = contact["email"],
-            defaults = {"name": contact["name"]}
+            **contact
         )
         status["total"] += 1
-        if created:
-            status["imported"] += 1
+        status["imported"] += 1
         return status
 
 
