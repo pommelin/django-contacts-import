@@ -196,10 +196,8 @@ def facebook_auth(request):
         return HttpResponseRedirect("%s?%s" % (
             reverse("oauth_access_login", args=["facebook",]),
             urlencode({
-                "next": "http://%s%s" % (
-                site.domain,
-                reverse("import_facebook_auth")
-            )})
+                "next": reverse("import_facebook_auth")
+            })
         ))
 
 @login_required
@@ -216,10 +214,8 @@ def twitter_auth(request):
         return HttpResponseRedirect("%s?%s" % (
             reverse("oauth_access_login", args=["twitter",]),
             urlencode({
-                "next": "http://%s%s" % (
-                site.domain,
-                reverse("import_twitter_auth")
-            )})
+                "next": reverse("import_twitter_auth")
+            })
         ))
 
 def authsub_login(request, redirect_to=None):
