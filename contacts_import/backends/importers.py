@@ -9,7 +9,6 @@ from contacts_import.settings import RUNNER
 
 import facebook
 import twitter
-from oauth import oauth
 from urlparse import parse_qs
 
 # determine the base class based on what type of importing should be done
