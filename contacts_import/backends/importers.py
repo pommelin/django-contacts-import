@@ -9,7 +9,10 @@ from contacts_import.settings import RUNNER
 
 import facebook
 import twitter
-from urlparse import parse_qs
+try:
+    from urlparse import parse_qs
+except ImportError:
+    from cgi import parse_qs
 
 # determine the base class based on what type of importing should be done
 if issubclass(RUNNER, AsyncRunner):
