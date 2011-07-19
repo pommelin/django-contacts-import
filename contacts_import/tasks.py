@@ -1,4 +1,4 @@
-from celery.task import tasks
+from celery.task import task
 
 from contacts_import.backends import importers
 
