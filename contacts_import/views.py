@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.contrib.sites.models import Site
 from django.core.paginator import Paginator
 from django.core.urlresolvers import reverse
 from django.http import HttpResponse, HttpResponseRedirect
@@ -11,9 +12,13 @@ from django.contrib.auth.decorators import login_required
 from gdata.contacts.service import ContactsService
 
 from contacts_import.forms import VcardImportForm
-from contacts_import.backends.importers import GoogleImporter, YahooImporter
+from contacts_import.backends.importers import GoogleImporter, \
+    YahooImporter, FacebookImporter, TwitterImporter
 from contacts_import.models import TransientContact
 from contacts_import.settings import RUNNER, CALLBACK
+
+from oauth_access.models import UserAssociation
+from urllib import urlencode
 
 
 GOOGLE_CONTACTS_URI = "http://www.google.com/m8/feeds/"
@@ -83,6 +88,7 @@ def import_contacts(request, template_name="contacts_import/import_contacts.html
                 # return a HttpResponse
                 response = callback(request, selected)
                 TransientContact.objects.filter(owner=request.user).delete()
+                request.session.pop("type", None)
                 return response
         
         else:
@@ -90,6 +96,7 @@ def import_contacts(request, template_name="contacts_import/import_contacts.html
             
             if action == "import_yahoo":
                 yahoo_token = request.session.pop("yahoo_token", None)
+                request.session["type"] = "yahoo"
                 if yahoo_token:
                     runner = runner_class(YahooImporter,
                         user = request.user,
@@ -100,6 +107,7 @@ def import_contacts(request, template_name="contacts_import/import_contacts.html
             
             elif action == "import_google":
                 authsub_token = request.session.pop("authsub_token", None)
+                request.session["type"] = "google"
                 if authsub_token:
                     runner = runner_class(GoogleImporter,
                         user = request.user,
@@ -107,13 +115,62 @@ def import_contacts(request, template_name="contacts_import/import_contacts.html
                     )
                     results = runner.import_contacts()
                     return _import_success(request, results)
+            
+            elif action == "import_facebook":
+                facebook_token = request.session.pop("facebook_token", None)
+                request.session["type"] = "facebook"
+                if facebook_token:
+                    runner = runner_class(FacebookImporter,
+                        user = request.user,
+                        facebook_token = facebook_token
+                    )
+                    results = runner.import_contacts()
+                    return _import_success(request, results)
+
+            elif action == "import_twitter":
+                twitter_token = request.session.pop("twitter_token", None)
+                request.session["type"] = "twitter"
+                if twitter_token:
+                    runner = runner_class(TwitterImporter,
+                        user = request.user,
+                        twitter_token = twitter_token
+                    )
+                    results = runner.import_contacts()
+                    return _import_success(request, results)
+
     else:
         form = VcardImportForm()
+    
+    facebook_token = request.session.get("facebook_token", None)
+    if not facebook_token:
+        try:
+            auth_access_token = UserAssociation.objects.get(
+                user=request.user,
+                service="facebook"
+            )
+            request.session["facebook_token"] = auth_access_token.token
+            return HttpResponseRedirect(reverse("import_contacts"))
+        except:
+            pass
+
+    twitter_token = request.session.get("twitter_token", None)
+    if not twitter_token:
+        try:
+            auth_access_token = UserAssociation.objects.get(
+                user=request.user,
+                service="twitter"
+            )
+            request.session["twitter_token"] = auth_access_token.token
+            return HttpResponseRedirect(reverse("import_contacts"))
+        except:
+            pass
     
     ctx = {
         "form": form,
         "yahoo_token": request.session.get("yahoo_token"),
         "authsub_token": request.session.get("authsub_token"),
+        "facebook_token": facebook_token,
+        "twitter_token": twitter_token,
         "page": page,
         "task_id": request.session.pop("import_contacts_task_id", None),
     }
@@ -125,6 +182,41 @@ def _authsub_url(next):
     contacts_service = ContactsService()
     return contacts_service.GenerateAuthSubURL(next, GOOGLE_CONTACTS_URI, False, True)
 
+@login_required
+def facebook_auth(request):
+    try:
+        auth_access_token = UserAssociation.objects.get(
+            user=request.user,
+            service="facebook"
+        )
+        request.session["facebook_token"] = auth_access_token.token
+        return HttpResponseRedirect(reverse("import_contacts"))
+    except UserAssociation.DoesNotExist:
+        site = Site.objects.get_current()
+        return HttpResponseRedirect("%s?%s" % (
+            reverse("oauth_access_login", args=["facebook",]),
+            urlencode({
+                "next": reverse("import_facebook_auth")
+            })
+        ))
+
+@login_required
+def twitter_auth(request):
+    try:
+        auth_access_token = UserAssociation.objects.get(
+            user=request.user,
+            service="twitter"
+        )
+        request.session["twitter_token"] = auth_access_token.token
+        return HttpResponseRedirect(reverse("import_contacts"))
+    except UserAssociation.DoesNotExist:
+        site = Site.objects.get_current()
+        return HttpResponseRedirect("%s?%s" % (
+            reverse("oauth_access_login", args=["twitter",]),
+            urlencode({
+                "next": reverse("import_twitter_auth")
+            })
+        ))
 
 def authsub_login(request, redirect_to=None):
     if redirect_to is None:
